@@ -15,21 +15,6 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)
 
 const app = new App($("#canvas2d"), $("#stage"), $("#controls"), $("#hud"));
 
-/** #s=<encoded scenario> or #p=<preset id>; default: the Big Bucket. */
-function initialScenario() {
-  const params = new URLSearchParams(location.hash.slice(1));
-  const code = params.get("s");
-  if (code) {
-    const sc = decodeScenario(code);
-    if (sc) return { sc, hash: undefined };
-  }
-  const preset = presetById(params.get("p") ?? "") ?? PRESETS[0];
-  return { sc: preset.build(), hash: `p=${preset.id}` };
-}
-
-const init = initialScenario();
-app.load(init.sc, { hash: init.hash });
-
 /** Load a generated scene (off-thread); `r=<seed>` in the URL reproduces it. */
 function loadRandom(seed = randomSeed()): void {
   app.hud.innerHTML = "🎲 mixing up a new one…";
@@ -42,8 +27,36 @@ function loadRandom(seed = randomSeed()): void {
     })
     .catch(() => (app.hud.innerHTML = ""));
 }
-const seedParam = new URLSearchParams(location.hash.slice(1)).get("r");
-if (seedParam) loadRandom(Number(seedParam) >>> 0);
+
+/**
+ * URL hash → scene: `s=<encoded scenario>`, `p=<preset id>` or `r=<seed>`;
+ * default is the Big Bucket. Runs at startup and when the user edits the
+ * hash (our own history.replaceState doesn't fire hashchange).
+ */
+function loadFromHash(): void {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const seed = params.get("r");
+  if (seed) {
+    // Keep the r= hash (and whatever is on screen) while the worker builds it.
+    if (!app.world) app.load(PRESETS[0].build(), { updateUrl: false });
+    loadRandom(Number(seed) >>> 0);
+    return;
+  }
+  const sc = decodeScenario(params.get("s") ?? "");
+  if (sc) {
+    app.load(sc);
+    return;
+  }
+  const preset = presetById(params.get("p") ?? "") ?? PRESETS[0];
+  app.load(preset.build(), { hash: `p=${preset.id}` });
+}
+loadFromHash();
+window.addEventListener("hashchange", () => {
+  if (app.mode !== playMode) app.setMode(playMode);
+  loadFromHash();
+  topbar();
+});
+
 const dash = $("#dash");
 const diffeq = $("#diffeq");
 app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots"), $("#eqs")));
