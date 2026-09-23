@@ -46,12 +46,33 @@ const seedParam = new URLSearchParams(location.hash.slice(1)).get("r");
 if (seedParam) loadRandom(Number(seedParam) >>> 0);
 const dash = $("#dash");
 const diffeq = $("#diffeq");
-app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots")));
+app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots"), $("#eqs")));
+/** The 3D view is lazy-loaded: three.js only downloads the first time it's used. */
+async function toggle3D(btn: HTMLButtonElement): Promise<void> {
+  const host = $("#three-host");
+  const canvas = $("#canvas2d");
+  if (app.altView) {
+    app.altView.dispose();
+    app.altView = null;
+    host.hidden = true;
+    canvas.hidden = false;
+  } else {
+    btn.textContent = "🧊 …";
+    const { View3D } = await import("./render/three3d");
+    host.hidden = false;
+    canvas.hidden = true;
+    app.altView = new View3D(host, app);
+    btn.textContent = "🧊 3D";
+  }
+  btn.setAttribute("aria-pressed", String(!!app.altView));
+}
+
 const modes = [playMode, new DemoMode(), new SplashemMode(), new DesignMode($("#designer"))];
 function topbar(): void {
   renderTopbar(app, $("#bar"), {
     modes,
     randomButton: { label: "🎲 random", title: "Make up a new water park", onClick: () => loadRandom() },
+    extraButtons: [{ label: "🧊 3D", title: "3D view (drag to orbit)", onClick: (btn) => void toggle3D(btn) }],
     onToggle: (key, on) => {
       if (key === "dash") dash.hidden = !on;
       if (key === "diffeq") diffeq.hidden = !on;

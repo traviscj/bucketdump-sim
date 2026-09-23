@@ -31,6 +31,7 @@ export class Plots implements Panel {
   constructor(
     private readonly host: HTMLElement,
     private readonly canvas: HTMLCanvasElement,
+    private readonly eqs: HTMLElement,
   ) {
     this.ctx = canvas.getContext("2d")!;
     // Tap the panel to cycle which bucket the big plots show.
@@ -62,12 +63,27 @@ export class Plots implements Panel {
       app.selected = buckets[(i + 1) % buckets.length].spec.id;
     };
 
+    this.equations(app, sel);
     const top = Math.round(H * 0.62);
     const third = W / 3;
     this.hysteresis(app, sel, { x: 0, y: 0, w: third, h: top });
     this.energy(sel, { x: third, y: 0, w: third, h: top });
     this.phase(app, sel, { x: 2 * third, y: 0, w: third, h: top });
     this.traces(app, { x: 0, y: top, w: W, h: H - top });
+  }
+
+  /** The governing equations with the selected bucket's live numbers plugged in. */
+  private equations(app: App, b: Bucket): void {
+    const ev = b.last;
+    const h = b.analysis;
+    const q = app.world.pipes.reduce((s, p) => s + p.flow * p.valve * app.world.master, 0);
+    const f = (v: number, d = 0) => v.toFixed(d);
+    const L = (v: number) => toLitres(v).toFixed(0);
+    this.eqs.innerHTML = [
+      `<i>${b.spec.id}</i>  I(θ,V)·θ̈ = τ(θ,V) − c·θ̇ + τ_push      ${f(ev.inertia)}·θ̈ = ${f(ev.tau)} − ${f(b.spec.damping)}·${f(b.om, 2)}`,
+      `     V̇ = q_in − q_weir,  q_weir = ⅔·Cd·√(2g)·H^³ᐟ²      q_in ≤ ${L(q)} L/s   q_weir = ${L(b.lastSpillRate)} L/s   V = ${L(b.volume)} L`,
+      `     τ = −g·Σmᵢ·xᵢ   free surface ⟂ g   C(θ) = ${L(ev.fluid.capacity)} L   fold: V_tip = ${h.vTip ? L(h.vTip) : "—"} L → V_ret = ${h.vRet != null ? L(h.vRet) : "—"} L`,
+    ].join("\n");
   }
 
   // ————— frames —————
