@@ -20,7 +20,7 @@ export class Person {
   lastHit = -1;
   constructor(readonly spec: PersonSpec) {}
   /** Volume (m²) that fully soaks a person. */
-  static readonly SOAK = 0.04;
+  static readonly SOAK = 0.12;
   get width(): number {
     return this.spec.height * 0.32;
   }
@@ -52,6 +52,8 @@ export class World {
   paused = false;
   events: SimEvent[] = [];
   stats: FlowStats = { poured: 0, grounded: 0, soaked: 0, lost: 0 };
+  /** Splash'em points: each hit scores by how dry its target still was (spread the love). */
+  points = 0;
   /** Which bucket each particle came from (−1 = a pipe), for the recapture grace. */
   private readonly src: Int16Array;
   private pipeAccum: number[];
@@ -297,7 +299,9 @@ export class World {
       const hw = p.width / 2;
       if (y > h + r || y < 0 || Math.abs(x - p.spec.x) > hw + r) continue;
       const before = p.wet;
-      p.wet = Math.min(1, p.wet + this.particles.vol[i] / Person.SOAK);
+      const dw = this.particles.vol[i] / Person.SOAK;
+      this.points += 100 * dw * (1 - p.wet);
+      p.wet = Math.min(1, p.wet + dw);
       p.lastHit = this.time;
       if (Math.floor(before * 4) !== Math.floor(p.wet * 4)) {
         this.events.push({ type: "soak", person: p.spec.id, wetness: p.wet });
@@ -320,12 +324,17 @@ export class World {
     return e;
   }
 
+  /** Horizontal extent people may roam (the framed content). */
+  renderBounds(): { minX: number; maxX: number } {
+    return { minX: this.scenario.view.minX, maxX: this.scenario.view.maxX };
+  }
+
   bucket(id: string): Bucket | undefined {
     return this.buckets.find((b) => b.spec.id === id);
   }
 
-  /** Splash'em score: soaked-ness summed over the crowd, 0–100 per person. */
+  /** Splash'em score (≤ 100 per person, with diminishing returns per person). */
   get score(): number {
-    return Math.round(this.people.reduce((s, p) => s + p.wet * 100, 0));
+    return Math.round(this.points);
   }
 }

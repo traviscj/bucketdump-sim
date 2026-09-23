@@ -5,6 +5,7 @@ import { wallOutline } from "./physics/shapes";
 import { Renderer2D } from "./render/canvas2d";
 import { type Mode, playMode } from "./modes/mode";
 import { renderControls } from "./ui/controls";
+import { Generator } from "./world/generator";
 import { type Scenario, cloneScenario, encodeScenario } from "./world/scenario";
 import { type SimEvent, World } from "./world/world";
 import type { Bucket } from "./physics/bucket";
@@ -37,6 +38,7 @@ export class App {
   readonly renderer: Renderer2D;
   readonly sound = new Sound();
   readonly recorder = new Recorder(30, 60);
+  readonly generator = new Generator();
   readonly toggles: Toggles = { transparent: true, debug: false, rainbow: false, dash: false, diffeq: false, muted: false };
   slow = false;
   mode: Mode = playMode;
@@ -83,6 +85,11 @@ export class App {
     const valves = this.world.pipes.map((p) => p.valve);
     this.load(this.scenario, { updateUrl: false });
     this.world.pipes.forEach((p, i) => (p.valve = valves[i] ?? p.valve));
+    renderControls(this, this.controls);
+  }
+
+  /** Rebuild the kid panel (after valves/pipes change programmatically). */
+  renderControls(): void {
     renderControls(this, this.controls);
   }
 
@@ -134,6 +141,7 @@ export class App {
 
   stop(): void {
     cancelAnimationFrame(this.raf);
+    this.generator.dispose();
     for (const off of this.listeners) off();
     this.listeners = [];
   }

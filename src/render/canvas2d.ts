@@ -135,9 +135,11 @@ export class Renderer2D {
     const xr = view.sx(pivot.x + half);
     const py = view.sy(pivot.y);
     const gy = view.sy(0);
+    // Muted: the gantry is behind everything else, in depth.
+    ctx.globalAlpha = 0.55;
     ctx.strokeStyle = FRAME;
     ctx.lineCap = "round";
-    ctx.lineWidth = Math.max(3, view.scale * 0.09);
+    ctx.lineWidth = Math.max(3, view.scale * 0.07);
     ctx.beginPath();
     ctx.moveTo(xl, gy);
     ctx.lineTo(xl, py);
@@ -151,6 +153,7 @@ export class Renderer2D {
     ctx.moveTo(xl, py);
     ctx.lineTo(xr, py);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // Beacon on a mast above the left post: dark → flashing red as the warning rises.
     const w = b.warning;

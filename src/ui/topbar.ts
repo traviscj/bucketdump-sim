@@ -7,6 +7,8 @@ export interface TopbarOptions {
   /** Extra toggle handlers keyed by toggle name (e.g. to show/hide panels). */
   onToggle?: (key: keyof Toggles, on: boolean) => void;
   extraButtons?: { label: string; title: string; onClick: (btn: HTMLButtonElement) => void }[];
+  /** Shown first in the modes group. */
+  randomButton?: { label: string; title: string; onClick: () => void };
 }
 
 const TOGGLES: { key: keyof Toggles; label: string; title: string }[] = [
@@ -41,7 +43,8 @@ export function renderTopbar(app: App, bar: HTMLElement, opts: TopbarOptions): v
   );
   const syncModes = () => modeButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(app.mode === opts.modes[i])));
   syncModes();
-  modes.replaceChildren(...modeButtons);
+  const random = opts.randomButton ? [button(opts.randomButton.label, opts.randomButton.title, opts.randomButton.onClick)] : [];
+  modes.replaceChildren(...random, ...modeButtons);
 
   toggles.replaceChildren(
     ...TOGGLES.map((t) => {

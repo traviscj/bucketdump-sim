@@ -1,6 +1,9 @@
 import "./style.css";
 import { App } from "./app";
+import { DemoMode } from "./modes/demo";
 import { playMode } from "./modes/mode";
+import { SplashemMode } from "./modes/splashem";
+import { randomSeed } from "./world/rng";
 import { Dashboard } from "./ui/dashboard";
 import { Plots } from "./ui/plots";
 import { renderTopbar } from "./ui/topbar";
@@ -25,16 +28,36 @@ function initialScenario() {
 
 const init = initialScenario();
 app.load(init.sc, { hash: init.hash });
+
+/** Load a generated scene (off-thread); `r=<seed>` in the URL reproduces it. */
+function loadRandom(seed = randomSeed()): void {
+  app.hud.innerHTML = "🎲 mixing up a new one…";
+  app.generator
+    .make(seed)
+    .then((sc) => {
+      if (app.mode !== playMode) app.setMode(playMode);
+      app.load(sc, { hash: `r=${seed}` });
+      topbar();
+    })
+    .catch(() => (app.hud.innerHTML = ""));
+}
+const seedParam = new URLSearchParams(location.hash.slice(1)).get("r");
+if (seedParam) loadRandom(Number(seedParam) >>> 0);
 const dash = $("#dash");
 const diffeq = $("#diffeq");
 app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots")));
-renderTopbar(app, $("#bar"), {
-  modes: [playMode],
-  onToggle: (key, on) => {
-    if (key === "dash") dash.hidden = !on;
-    if (key === "diffeq") diffeq.hidden = !on;
-  },
-});
+const modes = [playMode, new DemoMode(), new SplashemMode()];
+function topbar(): void {
+  renderTopbar(app, $("#bar"), {
+    modes,
+    randomButton: { label: "🎲 random", title: "Make up a new water park", onClick: () => loadRandom() },
+    onToggle: (key, on) => {
+      if (key === "dash") dash.hidden = !on;
+      if (key === "diffeq") diffeq.hidden = !on;
+    },
+  });
+}
+topbar();
 app.start();
 
 // Handy for poking at the sim from devtools.
