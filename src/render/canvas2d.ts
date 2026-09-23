@@ -2,6 +2,7 @@ import { transform } from "../geom/polygon";
 import type { Bucket } from "../physics/bucket";
 import { MATERIALS, MATERIAL_IDS, dominant } from "../physics/materials";
 import { wallOutline } from "../physics/shapes";
+import { contentBox } from "../world/scenario";
 import type { Person, SimEvent, World } from "../world/world";
 import { View } from "./view";
 
@@ -50,7 +51,7 @@ export class Renderer2D {
     this.canvas.height = Math.round(cssH * this.dpr);
     this.canvas.style.width = `${cssW}px`;
     this.canvas.style.height = `${cssH}px`;
-    this.view.fit(world.scenario.view, cssW, cssH, 6);
+    this.view.fit(contentBox(world.scenario), cssW, cssH, 6);
   }
 
   onEvent(e: SimEvent, world: World, now: number): void {
@@ -334,8 +335,15 @@ export class Renderer2D {
       ctx.stroke();
     }
 
-    // Counterweight block.
+    // Counterweight block on a rod from the bucket's bottom.
     const bw = toS(b.toWorld(b.model.ballastLocal));
+    const root = toS(b.toWorld({ x: 0, y: -b.spec.wall / 2 }));
+    ctx.strokeStyle = "#37474f";
+    ctx.lineWidth = Math.max(2, view.scale * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(root.x, root.y);
+    ctx.lineTo(bw.x, bw.y);
+    ctx.stroke();
     const bs = Math.max(5, Math.sqrt(b.spec.ballast / 30) * view.scale * 0.12);
     ctx.save();
     ctx.translate(bw.x, bw.y);

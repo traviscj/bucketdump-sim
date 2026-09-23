@@ -41,3 +41,20 @@ describe("Recorder", () => {
     expect(rec.traces.get("x")!.size).toBeLessThanOrEqual(11);
   });
 });
+
+describe("contentBox", () => {
+  it("frames every preset inside its nominal view and above the ground", async () => {
+    const { PRESETS } = await import("../src/world/presets");
+    const { contentBox } = await import("../src/world/scenario");
+    for (const p of PRESETS.slice(0, 3)) {
+      const sc = p.build();
+      const box = contentBox(sc);
+      expect(box.minY).toBe(sc.view.minY);
+      expect(box.maxX - box.minX).toBeGreaterThan(2);
+      for (const b of sc.buckets) {
+        expect(b.pivot.x).toBeGreaterThan(box.minX);
+        expect(b.pivot.x).toBeLessThan(box.maxX);
+      }
+    }
+  });
+});

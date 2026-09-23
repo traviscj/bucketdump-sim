@@ -100,3 +100,34 @@ function isScenario(s: unknown): s is Scenario {
 }
 
 export const cloneScenario = (s: Scenario): Scenario => structuredClone(s);
+
+/**
+ * Tight box around everything interesting (buckets at full swing, pipes,
+ * people, pegs, ramps) plus the ground, padded. Used to frame the camera so a
+ * portrait phone doesn't waste half the screen on sky.
+ */
+export function contentBox(s: Scenario, pad = 0.6): ViewBox {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let maxY = 0;
+  const grow = (x: number, y: number) => {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  };
+  for (const b of s.buckets) {
+    // Radius the bucket sweeps around its axle.
+    const r = Math.hypot(b.shape.width / 2 + Math.abs(b.pivotLocal.x), Math.max(b.pivotLocal.y, b.shape.height - b.pivotLocal.y)) + b.wall;
+    grow(b.pivot.x - r, b.pivot.y + r);
+    grow(b.pivot.x + r, b.pivot.y - r);
+  }
+  for (const p of s.pipes) grow(p.x, p.y + 0.5);
+  for (const p of s.people) grow(p.x, p.height);
+  for (const p of s.pegs) grow(p.x, p.y);
+  for (const r of s.ramps) {
+    grow(r.a.x, r.a.y);
+    grow(r.b.x, r.b.y);
+  }
+  if (!Number.isFinite(minX)) return s.view;
+  return { minX: minX - pad, maxX: maxX + pad, minY: s.view.minY, maxY: maxY + pad };
+}

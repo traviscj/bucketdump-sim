@@ -1,6 +1,8 @@
 import "./style.css";
 import { App } from "./app";
 import { playMode } from "./modes/mode";
+import { Dashboard } from "./ui/dashboard";
+import { Plots } from "./ui/plots";
 import { renderTopbar } from "./ui/topbar";
 import { PRESETS, presetById } from "./world/presets";
 import { decodeScenario } from "./world/scenario";
@@ -23,7 +25,16 @@ function initialScenario() {
 
 const init = initialScenario();
 app.load(init.sc, { hash: init.hash });
-renderTopbar(app, $("#bar"), { modes: [playMode] });
+const dash = $("#dash");
+const diffeq = $("#diffeq");
+app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots")));
+renderTopbar(app, $("#bar"), {
+  modes: [playMode],
+  onToggle: (key, on) => {
+    if (key === "dash") dash.hidden = !on;
+    if (key === "diffeq") diffeq.hidden = !on;
+  },
+});
 app.start();
 
 // Handy for poking at the sim from devtools.

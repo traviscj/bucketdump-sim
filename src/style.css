@@ -73,3 +73,4 @@ tr:nth-child(even) td { background: #ffffff08; }
   .bigbtn.dump { font-size: 18px; min-width: 76px; }
   #diffeq { height: 42%; }
 }
+tr.sel td { background: #ffd60a22; }
