@@ -105,6 +105,21 @@ describe("Bucket dynamics", () => {
     expect(b.warning).toBeGreaterThan(0.7);
   });
 
+  it("eta counts down toward the tip at constant inflow", () => {
+    const b = new Bucket(goodSpec());
+    const vTip = b.analysis.vTip!;
+    const q = 0.1;
+    const etas: number[] = [];
+    for (let i = 0; i < 240 * 6; i++) {
+      b.addFluid(q * DT, "water");
+      b.step(DT);
+      if (i % 240 === 239) etas.push(b.eta);
+    }
+    // After the EMA settles, eta ≈ (vTip − V)/q and falls ~1 s per second.
+    expect(etas[5]).toBeCloseTo((vTip - b.volume) / q, 0);
+    expect(etas[4] - etas[5]).toBeCloseTo(1, 1);
+  });
+
   it("a shove tips a half-full bucket", () => {
     const b = new Bucket(goodSpec());
     b.addFluid(b.analysis.vTip! * 0.6, "water");

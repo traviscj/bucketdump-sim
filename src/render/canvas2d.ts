@@ -131,8 +131,8 @@ export class Renderer2D {
    */
   private drawFrame(b: Bucket, now: number): void {
     const { ctx, view } = this;
-    const { pivot, shape } = b.spec;
-    const half = Math.hypot(shape.width / 2, shape.height) * 0.75 + 0.1;
+    const { pivot } = b.spec;
+    const half = gantryHalf(b);
     const xl = view.sx(pivot.x - half);
     const xr = view.sx(pivot.x + half);
     const py = view.sy(pivot.y);
@@ -364,6 +364,8 @@ export class Renderer2D {
     ctx.arc(ax.x, ax.y, Math.max(3, view.scale * 0.06), 0, Math.PI * 2);
     ctx.fill();
 
+    this.drawCountdown(b, now);
+
     if (opts.selected === b.spec.id) {
       ctx.setLineDash([6, 4]);
       ctx.strokeStyle = "#fff";
@@ -372,6 +374,30 @@ export class Renderer2D {
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
+
+  /** Big "3… 2… 1…" over a bucket that's about to go. */
+  private drawCountdown(b: Bucket, now: number): void {
+    const eta = b.eta;
+    if (!(eta < 3.5) || b.warning <= 0) return;
+    const { ctx, view } = this;
+    const n = Math.max(1, Math.ceil(eta));
+    const frac = eta - Math.floor(eta); // pulses once per second
+    // Above the beacon (clear of the pipe's stream, which lands mid-mouth).
+    const top = { x: b.spec.pivot.x - gantryHalf(b), y: b.spec.pivot.y + 0.75 };
+    const size = Math.max(22, view.scale * (0.55 + 0.25 * frac));
+    ctx.save();
+    ctx.font = `900 ${size}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#1d3557";
+    ctx.fillStyle = n === 1 ? "#ff3b30" : "#ffd60a";
+    const x = view.sx(top.x);
+    const y = view.sy(top.y) - 12 - Math.sin(now * 8) * 2;
+    ctx.strokeText(String(n), x, y);
+    ctx.fillText(String(n), x, y);
+    ctx.restore();
   }
 
   /** Highlight line along the free surface. */
@@ -476,4 +502,10 @@ export class Renderer2D {
       }
     }
   }
+}
+
+/** Half-spacing of the gantry posts: clear of the bucket as it swings. */
+function gantryHalf(b: Bucket): number {
+  const { width, height } = b.spec.shape;
+  return Math.hypot(width / 2, height) * 0.75 + 0.1;
 }

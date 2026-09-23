@@ -44,6 +44,9 @@ export class Bucket {
   private shoveTorque = 0;
   last: TorqueEval;
   lastSpillRate = 0;
+  /** Smoothed inflow (m²/s), for the time-to-tip countdown. */
+  inflowRate = 0;
+  private pendingIn = 0;
   private analysisCache: { rho: number; h: Hysteresis } | null = null;
 
   constructor(readonly spec: BucketSpec) {
@@ -91,12 +94,20 @@ export class Bucket {
     next[material] = (next[material] ?? 0) + volume / total;
     this.mix = next;
     this.volume = total;
+    this.pendingIn += volume;
   }
 
   /** Angular impulse from something hitting the bucket at world point `at`. */
   applyImpulse(at: Vec, impulse: Vec): void {
     const r = { x: at.x - this.spec.pivot.x, y: at.y - this.spec.pivot.y };
     this.om += (r.x * impulse.y - r.y * impulse.x) / this.last.inertia;
+  }
+
+  /** Seconds until the fill reaches V_tip at the current inflow (∞ if not filling). */
+  get eta(): number {
+    const vTip = this.analysis.vTip;
+    if (this.phase !== "filling" || !vTip || this.inflowRate < 1e-4) return Infinity;
+    return Math.max(0, (vTip - this.volume) / this.inflowRate);
   }
 
   /** A kid-sized shove in the tipping direction (or `dir` to override). */
@@ -113,6 +124,9 @@ export class Bucket {
   /** Advance by `dt`. Returns what poured over the lip this step, if anything. */
   step(dt: number): SpillOut | null {
     const { spec } = this;
+    // Inflow EMA with a ~0.7 s time constant (particles arrive in lumps).
+    this.inflowRate += (this.pendingIn / dt - this.inflowRate) * (1 - Math.exp(-dt / 0.7));
+    this.pendingIn = 0;
     const ev = this.model.evaluate(this.th, this.volume, this.density);
     this.last = ev;
 

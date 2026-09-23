@@ -50,7 +50,7 @@ export class Dashboard implements Panel {
               : `<td class="n ${s.k < 0 ? "bad" : ""}">${fmt(s.k)}</td><td class="n ${s.gm < 0 ? "bad" : ""}">${fmt(100 * s.gm, 1)}</td>
                  <td class="n">${fmt(s.period, 2)}</td>`
           }<td class="n">${fmt(b.last.mass)}</td>
-          <td class="n">${fmt(toLitres(b.lastSpillRate))}</td><td class="n">${b.dumps}</td>
+          <td class="n">${fmt(toLitres(b.lastSpillRate))}</td><td class="n">${b.dumps}</td><td class="n ${b.eta < 5 ? "warn" : ""}">${fmt(b.eta, 1)}</td>
           <td class="n">${fmt(toLitres(b.lastTipVolume))}</td>
           <td class="${verdictCls}">${h.verdict}</td><td class="n">${fmt(toLitres(h.vRet ?? NaN))}</td>
           <td class="n">${fmt((h.thDump ?? NaN) * DEG)}</td>
@@ -72,7 +72,7 @@ export class Dashboard implements Panel {
       <table>
         <tr><th>bkt</th><th>st</th><th>V L</th><th>Vtip L</th><th>%tip</th><th>%cap</th><th>θ °</th><th>ω r/s</th>
             <th>τ N·m</th><th>I kg·m²</th><th>k N·m/r</th><th>GM cm</th><th>T s</th><th>M kg</th><th>q L/s</th>
-            <th>#</th><th>Vlift L</th><th>verdict</th><th>Vret L</th><th>θd °</th></tr>
+            <th>#</th><th>ETA s</th><th>Vlift L</th><th>verdict</th><th>Vret L</th><th>θd °</th></tr>
         ${rows}
       </table>
       <table style="margin-top:3px">
