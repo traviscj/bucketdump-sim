@@ -37,6 +37,7 @@ export interface FlowStats {
 /** Seconds during which a bucket can't recapture what it just poured. */
 const RECAPTURE_GRACE = 0.2;
 const FIXED_DT = 1 / 120;
+const WALL_IMPULSE_SHARE = 0.25;
 const BUCKET_SUBSTEPS = 2;
 
 /** The whole simulated scene: pipes → particles → buckets → particles → ground/people. */
@@ -220,7 +221,9 @@ export class World {
           const sx = -b.om * (y - b.spec.pivot.y);
           const sy = b.om * (x - b.spec.pivot.x);
           const nv = reflect(vx, vy, c.nx, c.ny, mat.restitution, 0.1, sx, sy);
-          const m = P.vol[i] * DEPTH * mat.density;
+          // Only part of a splash's momentum reaches the bucket (the rest sprays
+          // sideways); full transfer lets a stream pin an empty bucket over.
+          const m = P.vol[i] * DEPTH * mat.density * WALL_IMPULSE_SHARE;
           b.applyImpulse({ x, y }, { x: -m * (nv.vx - vx), y: -m * (nv.vy - vy) });
           vx = nv.vx;
           vy = nv.vy;
