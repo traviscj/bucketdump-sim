@@ -72,10 +72,18 @@ tr:nth-child(even) td { background: #ffffff08; }
 
 @media (max-width: 640px) {
   .brand { display: none; }
-  .valve { min-width: 120px; }
-  .bigbtn { font-size: 15px; min-width: 60px; padding: 4px 8px; }
-  .bigbtn.dump { font-size: 18px; min-width: 76px; }
+  /* Two rows: scenes on top, modes + options below; each scrolls sideways. */
+  #bar { flex-wrap: wrap; row-gap: 3px; }
+  .scroller { flex-basis: 100%; }
+  #modes, #toggles { overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1 1 auto; }
   #diffeq { height: 42%; }
+}
+/* Portrait phones: spend the spare height on bigger kid controls. */
+@media (max-width: 700px) and (orientation: portrait) {
+  #controls { flex-wrap: wrap; overflow-x: visible; }
+  .valve { flex: 1 1 100%; min-width: 0; }
+  .bigbtn { flex: 1 1 0; min-height: 68px; min-width: 0; font-size: 17px; padding: 4px; }
+  .bigbtn.dump { flex-grow: 1.6; font-size: 22px; }
 }
 tr.sel td { background: #ffd60a22; }
 

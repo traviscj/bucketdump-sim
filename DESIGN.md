@@ -40,26 +40,28 @@ buckets chain naturally (a dump fills the next bucket).
 | # | module | responsibility | tests |
 |---|---|---|---|
 | 1 | `geom/vec`, `geom/polygon` | vec ops, area/centroid/2nd-moment, half-plane clip, transforms, point-in-poly | ✓ |
-| 2 | `physics/fluid` | level solve h(V,θ), capacity C(θ), lip, fluid polygon | ✓ |
-| 3 | `physics/shapes` | cavity generators: rect, flared, V, scoop, round; wall polygon | ✓ |
-| 4 | `physics/bucket` | rigid-body state + step, spill, torque, inertia, push | ✓ |
-| 5 | `physics/particles` | SoA particle pool, gravity, peg/ramp/ground collide, capture | ✓ |
-| 6 | `physics/materials` | water / acorns / balls / sand / slime (colour, radius, bounce, Cd) | – |
-| 7 | `world/world` | scene: pipes, buckets, pegs, ramps, people; fixed-step loop, events | ✓ |
-| 8 | `world/scenario` | serialisable scene description (JSON, URL hash) | ✓ |
-| 9 | `world/presets` | hand-tuned "known good" scenes | ✓ (all dump) |
-| 10 | `world/random` | seeded generator of scenes, validated headlessly | ✓ |
-| 11 | `analysis/equilibrium` | τ(θ,V), equilibrium branch, V_tip/V_ret, "works?" verdict | ✓ |
-| 12 | `analysis/recorder` | ring-buffer traces for θ, ω, V, spill per bucket | ✓ |
-| 13 | `audio/sound` | WebAudio synth: ding bell, splash noise, creak, cheer | – |
-| 14 | `render/view` | world↔screen fit transform, hit-testing | ✓ |
-| 15 | `render/canvas2d` | scene painter (transparent/opaque buckets, particles, overlays) | – |
-| 16 | `render/three3d` | 3D view of the same world (lazy-loaded three.js) | – |
-| 17 | `ui/controls` | kid control panel: valve levers, big DUMP button, modes | – |
-| 18 | `ui/dashboard` | dense debug table (htop-style) | – |
-| 19 | `ui/plots` | ∂ panel: small-multiple traces, phase portrait, hysteresis diagram | – |
-| 20 | `ui/designer` | drag/edit buckets, pipes, pegs; inspector | – |
-| 21 | `modes/*` | play, design, random, demo playlist, splash'em game | – |
+| 2 | `physics/fluid` | level solve h(V,θ), capacity C(θ), lip, weir rate | ✓ |
+| 3 | `physics/shapes` | cavity generators: rect, flared, vee, scoop, round (+mirror); wall outline | ✓ |
+| 4 | `physics/bucketModel` | static model: shell mass props, τ(θ,V,ρ), I(θ,V) | ✓ |
+| 5 | `physics/bucket` | live state (θ, ω, V, mix), step with stops, spill, shove, inflow EMA / ETA | ✓ |
+| 6 | `physics/particles`, `physics/collide` | SoA particle pool; disc/segment/circle contacts, reflection | ✓ |
+| 7 | `physics/materials` | water / acorns / balls / sand / slime; mixtures | via bucket |
+| 8 | `world/world` | pipes → particles → capture/bounce → pegs/ramps/people/ground; events; volume ledger | ✓ |
+| 9 | `world/scenario` | serialisable scene, base64url codec, content framing box | ✓ |
+| 10 | `world/buildBucket` | recipe → spec: solve counterweight for a target tip fill, safe dump stop, "returns while fed" | ✓ |
+| 11 | `world/presets` | 8 hand-made scenes; auto-placed cascades | ✓ (60 s headless) |
+| 12 | `world/random`, `world/generator(.worker)` | seeded generator + headless validation, off-thread | ✓ |
+| 13 | `analysis/equilibrium` | equilibrium set, fold V_tip, V_ret, verdict, over-the-top angle | ✓ |
+| 14 | `analysis/stiffness` | k = −∂τ/∂θ, GM, period; energy landscape U(θ) | ✓ |
+| 15 | `analysis/recorder` | ring-buffer traces | ✓ |
+| 16 | `audio/sound` | WebAudio synth: ding-ding-ding, whoosh, splash, clack, boing, thunk, cheer | – |
+| 17 | `render/view` | world↔screen fit transform | ✓ |
+| 18 | `render/canvas2d` (+`people`, `debugOverlay`, `color`) | 2D painter | manual |
+| 19 | `render/three3d` | lazy-loaded 3D view of the same sim | manual |
+| 20 | `ui/controls`, `ui/topbar`, `ui/form` | kid panel, top bar, inspector form helpers | manual |
+| 21 | `ui/dashboard`, `ui/plots` | dense table; ∂ panel (equations, hysteresis, landscape, phase, traces) | manual |
+| 22 | `modes/*` | play, demo playlist, splash'em, designer | manual |
+| 23 | `app`, `main` | frame loop, events → sound/effects, input, URL state, shortcuts | manual |
 
 ## Kid-facing features
 - Big lever valves per pipe, big red DUMP button, tap a bucket to shove it.
