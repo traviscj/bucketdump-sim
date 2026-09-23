@@ -3,7 +3,7 @@ import type { Vec } from "../geom/vec";
 import { Bucket } from "../physics/bucket";
 import { circleContact, reflect, segmentContact, segmentsCross } from "../physics/collide";
 import { DEPTH, G } from "../physics/constants";
-import { MATERIALS, type MaterialId, sampleMix } from "../physics/materials";
+import { MATERIALS, type Material, type MaterialId, sampleMix } from "../physics/materials";
 import { ParticlePool } from "../physics/particles";
 import { Rng } from "./rng";
 import type { PersonSpec, PipeSpec, Scenario } from "./scenario";
@@ -24,6 +24,15 @@ export class Person {
   get width(): number {
     return this.spec.height * 0.32;
   }
+}
+
+interface BucketGeo {
+  b: Bucket;
+  cav: { x: number; y: number }[];
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
 /** Book-keeping so tests (and the dashboard) can check volume conservation. */
@@ -59,6 +68,8 @@ export class World {
   private pipeAccum: number[];
   private spillAccum: number[];
   private accumulator = 0;
+  /** Scratch kinematics for the particle being stepped (no per-particle allocation). */
+  private readonly kin = { x: 0, y: 0, vx: 0, vy: 0 };
 
   constructor(
     readonly scenario: Scenario,
@@ -174,123 +185,147 @@ export class World {
 
   private stepParticles(dt: number): void {
     const P = this.particles;
-    const { pegs, ramps } = this.scenario;
-    // Per-step bucket geometry in world coordinates.
-    const geo = this.buckets.map((b) => {
-      const pose = b.pose;
-      const cav = transform(b.model.cavity, pose);
+    const geo = this.bucketGeometry();
+    const { minX, maxX } = this.scenario.view;
+    const k = this.kin;
+
+    for (let i = 0; i < P.count; i++) {
+      const mat = MATERIALS[P.material(i)];
+      const x0 = P.x[i];
+      const y0 = P.y[i];
+      // Gravity + linear drag, then a straight-line move; collisions fix it up.
+      const damp = 1 - mat.drag * dt;
+      k.vx = P.vx[i] * damp;
+      k.vy = (P.vy[i] - G * dt) * damp;
+      k.x = x0 + k.vx * dt;
+      k.y = y0 + k.vy * dt;
+      P.age[i] += dt;
+
+      let gone = this.bucketContact(i, mat, x0, y0, geo);
+      if (!gone) {
+        this.sceneryContact(mat);
+        gone = this.personContact(i, mat) || this.groundContact(i, mat) || this.escaped(i, minX, maxX);
+      }
+      if (gone) {
+        P.kill(i--);
+        continue;
+      }
+      P.x[i] = k.x;
+      P.y[i] = k.y;
+      P.vx[i] = k.vx;
+      P.vy[i] = k.vy;
+    }
+  }
+
+  /** Per-step bucket cavities in world coordinates, with padded AABBs for culling. */
+  private bucketGeometry(): BucketGeo[] {
+    return this.buckets.map((b) => {
+      const cav = transform(b.model.cavity, b.pose);
       const bb = bounds(cav);
       const pad = b.spec.wall + 0.1;
       return { b, cav, minX: bb.minX - pad, maxX: bb.maxX + pad, minY: bb.minY - pad, maxY: bb.maxY + pad };
     });
-    const { minX, maxX } = this.scenario.view;
+  }
 
-    for (let i = 0; i < P.count; i++) {
-      const mat = MATERIALS[P.material(i)];
-      const r = mat.radius;
-      const x0 = P.x[i];
-      const y0 = P.y[i];
-      let vx = P.vx[i];
-      let vy = P.vy[i] - G * dt;
-      const damp = 1 - mat.drag * dt;
-      vx *= damp;
-      vy *= damp;
-      let x = x0 + vx * dt;
-      let y = y0 + vy * dt;
-      P.age[i] += dt;
-
-      // 1) Captured by a bucket? (inside the cavity, or crossed the mouth this step)
-      let captured = false;
-      for (let bi = 0; bi < geo.length; bi++) {
-        const g = geo[bi];
-        if (x < g.minX || x > g.maxX || y < g.minY || y > g.maxY) continue;
-        if (this.src[i] === bi && P.age[i] < RECAPTURE_GRACE) continue;
-        const cav = g.cav;
-        const n = cav.length;
-        const inside = contains(cav, { x, y }) || segmentsCross({ x: x0, y: y0 }, { x, y }, cav[n - 1], cav[0]);
-        if (inside) {
-          const m = P.vol[i] * DEPTH * mat.density;
-          g.b.addFluid(P.vol[i], mat.id);
-          g.b.applyImpulse({ x, y }, { x: m * vx, y: m * vy });
-          captured = true;
-          break;
-        }
-        // 2) Otherwise bounce off the bucket's walls (treated as capsules).
-        for (let s = 0; s < n - 1; s++) {
-          const c = segmentContact(x, y, r + g.b.spec.wall / 2, cav[s], cav[s + 1]);
-          if (!c) continue;
-          const b = g.b;
-          const sx = -b.om * (y - b.spec.pivot.y);
-          const sy = b.om * (x - b.spec.pivot.x);
-          const nv = reflect(vx, vy, c.nx, c.ny, mat.restitution, 0.1, sx, sy);
-          // Only part of a splash's momentum reaches the bucket (the rest sprays
-          // sideways); full transfer lets a stream pin an empty bucket over.
-          const m = P.vol[i] * DEPTH * mat.density * WALL_IMPULSE_SHARE;
-          b.applyImpulse({ x, y }, { x: -m * (nv.vx - vx), y: -m * (nv.vy - vy) });
-          vx = nv.vx;
-          vy = nv.vy;
-          x += c.nx * c.depth;
-          y += c.ny * c.depth;
-        }
+  /**
+   * Capture by a bucket (inside its cavity, or crossed its mouth this step)
+   * transferring volume and momentum; otherwise bounce off its walls.
+   * Returns true if the particle was captured.
+   */
+  private bucketContact(i: number, mat: Material, x0: number, y0: number, geo: BucketGeo[]): boolean {
+    const P = this.particles;
+    const k = this.kin;
+    const mass = P.vol[i] * DEPTH * mat.density;
+    for (let bi = 0; bi < geo.length; bi++) {
+      const { b, cav, minX, maxX, minY, maxY } = geo[bi];
+      if (k.x < minX || k.x > maxX || k.y < minY || k.y > maxY) continue;
+      if (this.src[i] === bi && P.age[i] < RECAPTURE_GRACE) continue;
+      const n = cav.length;
+      const p = { x: k.x, y: k.y };
+      if (contains(cav, p) || segmentsCross({ x: x0, y: y0 }, p, cav[n - 1], cav[0])) {
+        b.addFluid(P.vol[i], mat.id);
+        b.applyImpulse(p, { x: mass * k.vx, y: mass * k.vy });
+        return true;
       }
-      if (captured) {
-        P.kill(i--);
-        continue;
-      }
-
-      // 3) Static scenery.
-      for (const p of pegs) {
-        const c = circleContact(x, y, r, p.x, p.y, p.r);
+      // Walls are capsules; the surface moves with the bucket (ω × r).
+      for (let s = 0; s < n - 1; s++) {
+        const c = segmentContact(k.x, k.y, mat.radius + b.spec.wall / 2, cav[s], cav[s + 1]);
         if (!c) continue;
-        ({ vx, vy } = reflect(vx, vy, c.nx, c.ny, Math.max(mat.restitution, 0.35), 0.05));
-        x += c.nx * c.depth;
-        y += c.ny * c.depth;
+        const sx = -b.om * (k.y - b.spec.pivot.y);
+        const sy = b.om * (k.x - b.spec.pivot.x);
+        const nv = reflect(k.vx, k.vy, c.nx, c.ny, mat.restitution, 0.1, sx, sy);
+        // Only part of a splash's momentum reaches the bucket (the rest sprays
+        // sideways); full transfer lets a stream pin an empty bucket over.
+        const m = mass * WALL_IMPULSE_SHARE;
+        b.applyImpulse({ x: k.x, y: k.y }, { x: -m * (nv.vx - k.vx), y: -m * (nv.vy - k.vy) });
+        k.vx = nv.vx;
+        k.vy = nv.vy;
+        k.x += c.nx * c.depth;
+        k.y += c.ny * c.depth;
       }
-      for (const rp of ramps) {
-        const c = segmentContact(x, y, r + 0.03, rp.a, rp.b);
-        if (!c) continue;
-        ({ vx, vy } = reflect(vx, vy, c.nx, c.ny, mat.restitution * 0.5, 0.02));
-        x += c.nx * c.depth;
-        y += c.ny * c.depth;
-      }
-
-      // 4) People.
-      if (this.hitPerson(i, x, y, r)) {
-        if (mat.restitution < 0.3) {
-          this.stats.soaked += P.vol[i];
-          P.kill(i--);
-          continue;
-        }
-        vx = -vx * 0.5;
-        vy = Math.abs(vy) * mat.restitution;
-      }
-
-      // 5) Ground.
-      if (y < r) {
-        const speed = Math.hypot(vx, vy);
-        if (P.hits[i] === 0) {
-          this.events.push({ type: "splash", x, y: 0, volume: P.vol[i], speed, material: mat.id });
-        }
-        if (mat.restitution < 0.3 || P.hits[i] > 5 || speed < 0.3) {
-          this.stats.grounded += P.vol[i];
-          P.kill(i--);
-          continue;
-        }
-        P.hits[i]++;
-        y = r;
-        ({ vx, vy } = reflect(vx, vy, 0, 1, mat.restitution, 0.2));
-      }
-
-      if (x < minX - 3 || x > maxX + 3 || P.age[i] > 20) {
-        this.stats.lost += P.vol[i];
-        P.kill(i--);
-        continue;
-      }
-      P.x[i] = x;
-      P.y[i] = y;
-      P.vx[i] = vx;
-      P.vy[i] = vy;
     }
+    return false;
+  }
+
+  /** Pegs (plinko) and ramps. */
+  private sceneryContact(mat: Material): void {
+    const k = this.kin;
+    for (const p of this.scenario.pegs) {
+      const c = circleContact(k.x, k.y, mat.radius, p.x, p.y, p.r);
+      if (c) this.bounce(c, Math.max(mat.restitution, 0.35), 0.05);
+    }
+    for (const rp of this.scenario.ramps) {
+      const c = segmentContact(k.x, k.y, mat.radius + 0.03, rp.a, rp.b);
+      if (c) this.bounce(c, mat.restitution * 0.5, 0.02);
+    }
+  }
+
+  private bounce(c: { nx: number; ny: number; depth: number }, e: number, friction: number): void {
+    const k = this.kin;
+    const v = reflect(k.vx, k.vy, c.nx, c.ny, e, friction);
+    k.vx = v.vx;
+    k.vy = v.vy;
+    k.x += c.nx * c.depth;
+    k.y += c.ny * c.depth;
+  }
+
+  /** Soak a person; liquids are absorbed (true), solids bounce off. */
+  private personContact(i: number, mat: Material): boolean {
+    const k = this.kin;
+    if (!this.hitPerson(i, k.x, k.y, mat.radius)) return false;
+    if (mat.restitution < 0.3) {
+      this.stats.soaked += this.particles.vol[i];
+      return true;
+    }
+    k.vx = -k.vx * 0.5;
+    k.vy = Math.abs(k.vy) * mat.restitution;
+    return false;
+  }
+
+  /** Splash on first touch; liquids and tired solids are absorbed (true). */
+  private groundContact(i: number, mat: Material): boolean {
+    const P = this.particles;
+    const k = this.kin;
+    if (k.y >= mat.radius) return false;
+    const speed = Math.hypot(k.vx, k.vy);
+    if (P.hits[i] === 0) this.events.push({ type: "splash", x: k.x, y: 0, volume: P.vol[i], speed, material: mat.id });
+    if (mat.restitution < 0.3 || P.hits[i] > 5 || speed < 0.3) {
+      this.stats.grounded += P.vol[i];
+      return true;
+    }
+    P.hits[i]++;
+    k.y = mat.radius;
+    const v = reflect(k.vx, k.vy, 0, 1, mat.restitution, 0.2);
+    k.vx = v.vx;
+    k.vy = v.vy;
+    return false;
+  }
+
+  private escaped(i: number, minX: number, maxX: number): boolean {
+    const k = this.kin;
+    if (k.x > minX - 3 && k.x < maxX + 3 && this.particles.age[i] <= 20) return false;
+    this.stats.lost += this.particles.vol[i];
+    return true;
   }
 
   private hitPerson(i: number, x: number, y: number, r: number): boolean {

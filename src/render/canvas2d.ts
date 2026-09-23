@@ -3,7 +3,10 @@ import type { Bucket } from "../physics/bucket";
 import { MATERIALS, MATERIAL_IDS, dominant } from "../physics/materials";
 import { wallOutline } from "../physics/shapes";
 import { contentBox } from "../world/scenario";
-import type { Person, SimEvent, World } from "../world/world";
+import type { SimEvent, World } from "../world/world";
+import { hexA, shade } from "./color";
+import { drawDebug } from "./debugOverlay";
+import { drawPerson } from "./people";
 import { View } from "./view";
 
 export interface RenderOptions {
@@ -28,7 +31,6 @@ const SKY_BOTTOM = "#d8f1ff";
 const GROUND = "#8fa3b3";
 const FRAME = "#f5b700";
 const PIPE = "#9aa4b2";
-const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac"];
 
 /** Canvas 2D painter for a World. Holds only cosmetic state (effects, puddles). */
 export class Renderer2D {
@@ -74,12 +76,12 @@ export class Renderer2D {
     for (const b of world.buckets) this.drawFrame(b, now);
     for (const r of world.scenario.ramps) this.drawRamp(r.a, r.b);
     for (const p of world.scenario.pegs) this.drawPeg(p.x, p.y, p.r);
-    for (const p of world.people) this.drawPerson(p, world.time);
+    for (const p of world.people) drawPerson(this.ctx, this.view, p, world.time);
     for (const b of world.buckets) this.drawBucket(b, opts, now);
     this.drawParticles(world, opts, now);
     for (const p of world.pipes) this.drawPipe(p.x, p.y, p.angle, p.valve * world.master, p.color, now);
     this.drawEffects(now);
-    if (opts.debug) for (const b of world.buckets) this.drawDebug(b);
+    if (opts.debug) for (const b of world.buckets) drawDebug(this.ctx, this.view, b);
   }
 
   // ————— scenery —————
@@ -444,83 +446,6 @@ export class Renderer2D {
     }
   }
 
-  private drawPerson(p: Person, time: number): void {
-    const { ctx, view } = this;
-    const h = p.spec.height;
-    const x = view.sx(p.spec.x);
-    const gy = view.sy(0);
-    const s = view.scale;
-    const headR = h * 0.1 * s;
-    const bodyTop = gy - h * 0.78 * s;
-    const bodyW = p.width * s;
-    const startled = time - p.lastHit < 0.6;
-    const hop = startled ? Math.abs(Math.sin(time * 18)) * 0.04 * s : 0;
-
-    ctx.save();
-    ctx.translate(0, -hop);
-    // Legs.
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = Math.max(2, s * 0.05);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x - bodyW * 0.2, gy - h * 0.4 * s);
-    ctx.lineTo(x - bodyW * 0.25, gy);
-    ctx.moveTo(x + bodyW * 0.2, gy - h * 0.4 * s);
-    ctx.lineTo(x + bodyW * 0.25, gy);
-    ctx.stroke();
-    // Arms: up when startled.
-    const armY = startled ? bodyTop - h * 0.15 * s : bodyTop + h * 0.3 * s;
-    ctx.beginPath();
-    ctx.moveTo(x - bodyW * 0.45, bodyTop + h * 0.05 * s);
-    ctx.lineTo(x - bodyW * 0.8, armY);
-    ctx.moveTo(x + bodyW * 0.45, bodyTop + h * 0.05 * s);
-    ctx.lineTo(x + bodyW * 0.8, armY);
-    ctx.stroke();
-    // Torso (swimsuit colour, darkens as it gets wet).
-    ctx.fillStyle = shade(p.spec.color, -0.4 * p.wet);
-    roundRect(ctx, x - bodyW / 2, bodyTop, bodyW, h * 0.42 * s, bodyW * 0.3);
-    ctx.fill();
-    // Head.
-    const hx = x;
-    const hy = bodyTop - headR * 1.05;
-    ctx.fillStyle = SKIN[Math.abs(hash(p.spec.id)) % SKIN.length];
-    ctx.beginPath();
-    ctx.arc(hx, hy, headR, 0, Math.PI * 2);
-    ctx.fill();
-    // Face.
-    ctx.fillStyle = "#222";
-    ctx.beginPath();
-    ctx.arc(hx - headR * 0.35, hy - headR * 0.15, Math.max(1, headR * 0.12), 0, Math.PI * 2);
-    ctx.arc(hx + headR * 0.35, hy - headR * 0.15, Math.max(1, headR * 0.12), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#222";
-    ctx.lineWidth = Math.max(1, headR * 0.12);
-    ctx.beginPath();
-    if (startled) {
-      ctx.arc(hx, hy + headR * 0.35, headR * 0.22, 0, Math.PI * 2); // "O!"
-    } else {
-      ctx.arc(hx, hy + headR * 0.15, headR * 0.4, 0.15 * Math.PI, 0.85 * Math.PI); // smile
-    }
-    ctx.stroke();
-    // Wet: blue sheen + drips.
-    if (p.wet > 0.05) {
-      ctx.fillStyle = `rgba(58,160,255,${0.35 * p.wet})`;
-      ctx.beginPath();
-      ctx.arc(hx, hy, headR * 1.05, Math.PI, 0);
-      ctx.fill();
-      const drips = Math.ceil(p.wet * 3);
-      ctx.fillStyle = "#3aa0ff";
-      for (let k = 0; k < drips; k++) {
-        const phase = (time * 1.5 + k * 0.37) % 1;
-        const dx = (k - (drips - 1) / 2) * bodyW * 0.4;
-        ctx.beginPath();
-        ctx.arc(x + dx, bodyTop + h * 0.42 * s + phase * h * 0.35 * s, Math.max(1.5, s * 0.02), 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.restore();
-  }
-
   private drawEffects(now: number): void {
     const { ctx, view } = this;
     this.effects = this.effects.filter((e) => now - e.t0 < (e.kind === "bang" ? 0.9 : 0.6));
@@ -551,103 +476,4 @@ export class Renderer2D {
       }
     }
   }
-
-  // ————— dad mode —————
-
-  private drawDebug(b: Bucket): void {
-    const { ctx, view } = this;
-    const ev = b.last;
-    const pv = b.spec.pivot;
-    const pose = b.pose;
-    const dot = (x: number, y: number, r: number, color: string) => {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(view.sx(x), view.sy(y), r, 0, Math.PI * 2);
-      ctx.fill();
-    };
-    // Fluid centroid (blue), combined COM (magenta ⊕), plumb line to the ground.
-    if (ev.fluid.volume > 0) dot(ev.fluid.centroid.x + pose.x, ev.fluid.centroid.y + pose.y, 4, "#0050ff");
-    const com = { x: pv.x + ev.com.x, y: pv.y + ev.com.y };
-    ctx.strokeStyle = "#ff00c8";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(view.sx(com.x), view.sy(com.y));
-    ctx.lineTo(view.sx(com.x), view.sy(0));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(view.sx(com.x), view.sy(com.y), 7, 0, Math.PI * 2);
-    ctx.moveTo(view.sx(com.x) - 7, view.sy(com.y));
-    ctx.lineTo(view.sx(com.x) + 7, view.sy(com.y));
-    ctx.moveTo(view.sx(com.x), view.sy(com.y) - 7);
-    ctx.lineTo(view.sx(com.x), view.sy(com.y) + 7);
-    ctx.stroke();
-    // Lever arm from the pivot, and a torque arc whose sweep ∝ τ.
-    ctx.strokeStyle = "#111";
-    ctx.beginPath();
-    ctx.moveTo(view.sx(pv.x), view.sy(pv.y));
-    ctx.lineTo(view.sx(com.x), view.sy(pv.y));
-    ctx.stroke();
-    const sweep = Math.max(-2.5, Math.min(2.5, ev.tau / 800));
-    const R = view.scale * 0.45;
-    ctx.strokeStyle = ev.tau > 0 ? "#00a86b" : "#d62828";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(view.sx(pv.x), view.sy(pv.y), R, -Math.PI / 2, -Math.PI / 2 - sweep, sweep > 0);
-    ctx.stroke();
-    // Lip marker + where the bucket would brim at this tilt.
-    dot(ev.fluid.lip.x + pose.x, ev.fluid.lip.y + pose.y, 3.5, "#ff9500");
-    ctx.strokeStyle = "rgba(255,149,0,0.8)";
-    ctx.setLineDash([2, 3]);
-    ctx.beginPath();
-    const ly = view.sy(ev.fluid.lip.y + pose.y);
-    const half = b.spec.shape.width * 0.7 * view.scale;
-    const cx = view.sx(b.toWorld({ x: 0, y: b.spec.shape.height / 2 }).x);
-    ctx.moveTo(cx - half, ly);
-    ctx.lineTo(cx + half, ly);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    // Readout.
-    ctx.font = "11px ui-monospace, Menlo, monospace";
-    ctx.fillStyle = "#111";
-    ctx.textAlign = "left";
-    const tx = view.sx(pv.x) + 10;
-    const ty = view.sy(pv.y) + 16;
-    ctx.fillText(`θ ${((b.th * 180) / Math.PI).toFixed(1).padStart(6)}°  τ ${ev.tau.toFixed(0).padStart(6)}`, tx, ty);
-    ctx.fillText(`V ${(b.volume * 1000).toFixed(0).padStart(5)}  cap ${(ev.fluid.capacity * 1000).toFixed(0).padStart(5)}`, tx, ty + 12);
-  }
-}
-
-// ————— colour helpers —————
-
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  const n = parseInt(h.length === 3 ? h.replace(/(.)/g, "$1$1") : h, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-export function hexA(hex: string, a: number): string {
-  if (!hex.startsWith("#")) return hex;
-  const [r, g, b] = hexToRgb(hex);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
-/** Lighten (k>0) or darken (k<0) a hex colour. */
-export function shade(hex: string, k: number): string {
-  if (!hex.startsWith("#")) return hex;
-  const [r, g, b] = hexToRgb(hex);
-  const f = (c: number) => Math.round(k < 0 ? c * (1 + k) : c + (255 - c) * k);
-  return `rgb(${f(r)},${f(g)},${f(b)})`;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
-
-function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
 }

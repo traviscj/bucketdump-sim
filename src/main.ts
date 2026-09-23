@@ -72,7 +72,10 @@ function topbar(): void {
   renderTopbar(app, $("#bar"), {
     modes,
     randomButton: { label: "🎲 random", title: "Make up a new water park", onClick: () => loadRandom() },
-    extraButtons: [{ label: "🧊 3D", title: "3D view (drag to orbit)", onClick: (btn) => void toggle3D(btn) }],
+    extraButtons: [
+      { label: "🧊 3D", title: "3D view (drag to orbit)", onClick: (btn) => void toggle3D(btn) },
+      { label: "⛶", title: "Fullscreen", onClick: () => void toggleFullscreen() },
+    ],
     onToggle: (key, on) => {
       if (key === "dash") dash.hidden = !on;
       if (key === "diffeq") diffeq.hidden = !on;
@@ -84,3 +87,31 @@ app.start();
 
 // Handy for poking at the sim from devtools.
 (window as unknown as { app: App }).app = app;
+
+function toggleFullscreen(): Promise<void> {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  return document.documentElement.requestFullscreen?.().catch(() => {}) ?? Promise.resolve();
+}
+
+/** Keyboard shortcuts: each just presses the matching on-screen button, so UI state stays in sync. */
+const KEYS: Record<string, string> = {
+  " ": "#controls .dump",
+  s: "#controls .slow",
+  p: "#controls .bigbtn.pause, #controls .bigbtn.go",
+  r: "#modes button[title^='Make up']",
+  g: "#toggles button[title='Transparent buckets']",
+  c: "#toggles button[title^='Show centres']",
+  b: "#toggles button[title='Dashboard']",
+  d: "#toggles button[title^='Traces']",
+  m: "#toggles button[title='Mute']",
+  "3": "#toggles button[title^='3D']",
+  f: "#toggles button[title='Fullscreen']",
+};
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+  const sel = KEYS[e.key.toLowerCase()];
+  if (!sel) return;
+  e.preventDefault();
+  app.sound.unlock();
+  document.querySelector<HTMLButtonElement>(sel)?.click();
+});
