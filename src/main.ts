@@ -1,6 +1,7 @@
 import "./style.css";
 import { App } from "./app";
 import { DemoMode } from "./modes/demo";
+import { DesignMode } from "./modes/designer";
 import { playMode } from "./modes/mode";
 import { SplashemMode } from "./modes/splashem";
 import { randomSeed } from "./world/rng";
@@ -46,7 +47,7 @@ if (seedParam) loadRandom(Number(seedParam) >>> 0);
 const dash = $("#dash");
 const diffeq = $("#diffeq");
 app.panels.push(new Dashboard(dash), new Plots(diffeq, $<HTMLCanvasElement>("#plots")));
-const modes = [playMode, new DemoMode(), new SplashemMode()];
+const modes = [playMode, new DemoMode(), new SplashemMode(), new DesignMode($("#designer"))];
 function topbar(): void {
   renderTopbar(app, $("#bar"), {
     modes,

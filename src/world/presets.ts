@@ -123,7 +123,7 @@ export const PRESETS: PresetInfo[] = [
       return scene("Cascade", {
         buckets: bs,
         pipes: [pipeOver(bs[0], "p1", { flow: 0.1 })],
-        people: crowd([2.8, 3.5, 4.2]),
+        people: crowd([0.2, 1.0, 1.8, 3.4]),
       });
     },
   },

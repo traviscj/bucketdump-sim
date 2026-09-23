@@ -74,3 +74,15 @@ tr:nth-child(even) td { background: #ffffff08; }
   #diffeq { height: 42%; }
 }
 tr.sel td { background: #ffd60a22; }
+
+/* ——— designer inspector: dense form ——— */
+.frow { display: grid; grid-template-columns: 70px 1fr auto; align-items: center; gap: 4px; padding: 1px 0; }
+.frow select, .frow input[type="color"] { font: 11px var(--mono); background: #1a2129; color: var(--fg); border: 1px solid #2a333d; }
+.fnum { display: flex; align-items: center; gap: 4px; }
+.fnum input { flex: 1; min-width: 60px; }
+.fnum output { width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+.fhead { color: var(--accent); margin: 4px 0 2px; border-bottom: 1px solid #2a333d; }
+.fbtns { display: flex; flex-wrap: wrap; gap: 2px; margin: 3px 0; }
+.fbtns button { font: 11px var(--mono); background: #1a2129; color: var(--fg); border: 1px solid #2a333d; border-radius: 3px; padding: 2px 5px; cursor: pointer; }
+.verdict { padding: 2px 4px; margin: 2px 0; border-left: 3px solid var(--dim); }
+.verdict.ok { border-color: var(--ok); } .verdict.bad { border-color: var(--bad); }
