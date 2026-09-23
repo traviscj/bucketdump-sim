@@ -64,17 +64,24 @@ buckets chain naturally (a dump fills the next bucket).
 | 23 | `app`, `main` | frame loop, events → sound/effects, input, URL state, shortcuts | manual |
 
 ## Kid-facing features
-- Big lever valves per pipe, big red DUMP button, tap a bucket to shove it.
-- Beacon + *ding ding ding* ramping up as a bucket nears tipping.
-- Transparent / opaque buckets; fill materials (water, acorns, balls, sand, slime).
-- Slow-mo + instant replay of the last dump.
-- Splash'em: crowd of people, wetness meters, score.
-- Demo playlist: random validated scenes, a couple of dumps each, then next.
-- Rainbow mode, haptics on dump (mobile), fullscreen.
+- Big lever valves per pipe (tap the emoji to change fill), big red DUMP!, tap a bucket to shove it.
+- Beacon + *ding ding ding* ramping up as a bucket nears tipping, then a 3-2-1 countdown.
+- Glass / painted buckets; fills: water, acorns, balls, sand, slime.
+- ¼× slow-mo, pause, restart; SPLOOSH! burst, splash rings, wet puddles; people get soaked.
+- 🎯 Splash'em: wandering crowd, 60 s rounds, diminishing-returns score, best score remembered.
+- 📺 Demo playlist: presets alternating with worker-generated random scenes, two dumps per bucket each.
+- 🌈 rainbow, 🧊 3D (orbit + tap), haptics on dump (mobile), fullscreen.
 
 ## Dad-facing features
-- Debug overlay: bucket COM, fluid COM, combined COM, pivot, lever arm, torque arrow.
-- Dashboard: V, V_tip, θ, ω, τ, I, spill rate, state per bucket; particle count, fps.
-- ∂ panel: θ(t), V(t) traces; (θ, θ̇) phase portrait; θ*(V) equilibrium branch
-  with stable/unstable segments and the live state dot tracing the hysteresis loop.
-- Scene JSON in URL hash (shareable/reproducible); seeded randomness.
+- ⊕ overlay: fluid centroid, combined COM + plumb line, lever arm, torque arc, lip, brim level.
+- ▦ dashboard: V, V_tip, %tip, θ, ω, τ, I, k, GM, period, spill rate, ETA, verdict, V_ret, θ_dump; pipes; volume ledger; fps.
+- ∂ panel: live governing equations; θ*(V) equilibrium set (stable/unstable) with the live
+  trajectory tracing the hysteresis loop; U(θ) landscape with the bucket as a ball;
+  (θ, θ̇) phase portrait; θ(t), V(t) for every bucket.
+- ✏️ designer with auto-tuned counterweight or manual physics and a live verdict.
+- Scene JSON in the URL hash (`s=`), presets as `p=<id>`, random scenes as `r=<seed>`.
+
+## Not done / ideas
+- Instant replay of the last dump (needs state snapshots; slow-mo covers most of the fun).
+- Water wheel driven by particle impulses; sprinklers; sloshing (fluid is quasi-static).
+- Pinch-zoom in 2D; the 3D view has no countdown numerals or effects yet.
