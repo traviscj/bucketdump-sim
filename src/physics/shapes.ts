@@ -17,11 +17,19 @@ export interface ShapeSpec {
   height: number;
   /** flared: bottom width as a fraction of `width`; scoop: right-rim height fraction. */
   ratio?: number;
+  /** Mirror left↔right (e.g. a scoop that pours left). */
+  mirror?: boolean;
 }
 
 export const SHAPE_KINDS: ShapeKind[] = ["rect", "flared", "vee", "scoop", "round"];
 
 export function cavityPolygon(spec: ShapeSpec): Polygon {
+  const poly = baseCavity(spec);
+  // Reversing after negating x keeps CCW winding and the left-rim-first convention.
+  return spec.mirror ? poly.map((p) => ({ x: -p.x, y: p.y })).reverse() : poly;
+}
+
+function baseCavity(spec: ShapeSpec): Polygon {
   const w = spec.width;
   const h = spec.height;
   const hw = w / 2;
