@@ -17,7 +17,7 @@ const TOGGLES: { key: keyof Toggles; label: string; title: string }[] = [
   { key: "debug", label: "⊕ com", title: "Show centres of mass, torque, lips" },
   { key: "dash", label: "▦ dash", title: "Dashboard" },
   { key: "diffeq", label: "∂ plots", title: "Traces, phase portrait, hysteresis" },
-  { key: "muted", label: "🔇", title: "Mute" },
+  { key: "muted", label: "🔊", title: "Mute" },
 ];
 
 export function renderTopbar(app: App, bar: HTMLElement, opts: TopbarOptions): void {
@@ -51,10 +51,16 @@ export function renderTopbar(app: App, bar: HTMLElement, opts: TopbarOptions): v
       const b = button(t.label, t.title, () => {
         app.toggles[t.key] = !app.toggles[t.key];
         b.setAttribute("aria-pressed", String(app.toggles[t.key]));
-        if (t.key === "muted") app.sound.setMuted(app.toggles.muted);
+        if (t.key === "muted") {
+          app.sound.setMuted(app.toggles.muted);
+          // The icon shows the current state: speaker on, or crossed out.
+          b.textContent = app.toggles.muted ? "🔇" : "🔊";
+          if (!app.toggles.muted) app.sound.ding();
+        }
         opts.onToggle?.(t.key, app.toggles[t.key]);
       });
       b.setAttribute("aria-pressed", String(app.toggles[t.key]));
+      if (t.key === "muted") b.textContent = app.toggles.muted ? "🔇" : "🔊";
       return b;
     }),
     ...(opts.extraButtons ?? []).map((x) => {

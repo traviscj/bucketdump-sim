@@ -161,7 +161,9 @@ export class App {
         now,
       );
     for (const p of this.panels) p.update(this, now);
-    const hud = this.mode.hud?.(this) ?? "";
+    // Browsers keep audio locked until a tap; say so instead of being silently mute.
+    const hint = !this.sound.running && !this.toggles.muted ? "<small>🔈 tap anywhere for sound</small>" : "";
+    const hud = (this.mode.hud?.(this) ?? "") + hint;
     if (this.hud.innerHTML !== hud) this.hud.innerHTML = hud;
   }
 
@@ -248,7 +250,16 @@ export class App {
       this.mode.pointerMove?.(this, x, y);
     });
     this.canvas.addEventListener("pointerup", () => this.mode.pointerUp?.(this));
-    // Any first touch anywhere unlocks audio on iOS.
-    window.addEventListener("pointerdown", () => this.sound.unlock(), { once: true });
+    // Unlock audio on any gesture. iOS only counts tap *release*, so listen to
+    // the end events too; unlock() is idempotent.
+    const unlock = () => this.sound.unlock();
+    for (const ev of ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const) {
+      window.addEventListener(ev, unlock, { capture: true, passive: true });
+      this.listeners.push(() => window.removeEventListener(ev, unlock, { capture: true }));
+    }
+    // iOS suspends ("interrupts") audio when backgrounded; resume on return.
+    const onShow = () => !document.hidden && this.sound.resume();
+    document.addEventListener("visibilitychange", onShow);
+    this.listeners.push(() => document.removeEventListener("visibilitychange", onShow));
   }
 }

@@ -4,6 +4,30 @@ import type { MaterialId } from "../physics/materials";
  * All sounds are synthesised with WebAudio — no asset files. The context is
  * created lazily on the first user gesture (mobile browsers require it).
  */
+/** 0.1 s of 8 kHz mono silence as a WAV data URI (for the iOS keep-alive element). */
+const SILENT_WAV = (() => {
+  const n = 800;
+  const b = new Uint8Array(44 + n);
+  const v = new DataView(b.buffer);
+  const str = (o: number, t: string) => [...t].forEach((c, i) => (b[o + i] = c.charCodeAt(0)));
+  str(0, "RIFF");
+  v.setUint32(4, 36 + n, true);
+  str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, 8000, true);
+  v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true); // 8-bit: silence is 128
+  str(36, "data");
+  v.setUint32(40, n, true);
+  b.fill(128, 44);
+  let bin = "";
+  for (const x of b) bin += String.fromCharCode(x);
+  return `data:audio/wav;base64,${btoa(bin)}`;
+})();
+
 export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -13,22 +37,56 @@ export class Sound {
   private lastSplash = 0;
   private lastImpact = new Map<string, number>();
 
+  /** A looping silent <audio>: on iOS, playing media moves the page to the "playback" audio category. */
+  private keepAlive: HTMLAudioElement | null = null;
+
+  /**
+   * Create/resume the AudioContext. Must run inside a user gesture; iOS only
+   * honours tap *release* (touchend/click), so callers wire it to several events
+   * and it is safe to call repeatedly.
+   */
   unlock(): void {
+    // Safari 17+: play even when the ring/silent switch is set to silent.
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = "playback";
+    if (!this.keepAlive) {
+      this.keepAlive = new Audio(SILENT_WAV);
+      this.keepAlive.loop = true;
+      this.keepAlive.setAttribute("playsinline", "");
+    }
+    if (this.keepAlive.paused) void this.keepAlive.play().catch(() => {});
+
     if (this.ctx) {
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+      if (this.ctx.state !== "running") void this.ctx.resume().catch(() => {});
       return;
     }
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;
     this.ctx = new Ctor();
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.6;
+    this.master.gain.value = this.muted ? 0 : 0.6;
     this.master.connect(this.ctx.destination);
     // One second of white noise, reused for splashes/shhh.
     const buf = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.noise = buf;
+    // iOS unlocks a context once a buffer has started inside the gesture.
+    const blip = this.ctx.createBufferSource();
+    blip.buffer = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+    blip.connect(this.ctx.destination);
+    blip.start(0);
+    void this.ctx.resume().catch(() => {});
+  }
+
+  /** Best-effort resume outside a gesture (works after a prior unlock on most browsers). */
+  resume(): void {
+    if (this.ctx && this.ctx.state !== "running") void this.ctx.resume().catch(() => {});
+  }
+
+  /** True once audio is actually running (for the speaker button). */
+  get running(): boolean {
+    return this.ctx?.state === "running";
   }
 
   setMuted(m: boolean): void {
